@@ -10,7 +10,7 @@ Before this section, we should deploy PolarDB for PG HTAP through the documents 
 
 We can verify PolarDB HTAP through commands as follows：
 
-```cmd_test_instance
+```shell
 ps xf
 ```
 Three processes should exist. There are one primary node(running on port 5432) and two read-only node(running on port 5433/5434).
@@ -22,7 +22,7 @@ TPC-H is a dataset dedicated for OLAP. [TPC-H](https://www.tpc.org/tpch/default5
 
 
 Download tpch-dbgen
-```cmd_download_tpch-dbgen
+```shell
 # Clone the code
 git clone https://github.com/qiuyuhang/tpch-dbgen.git
 
@@ -32,13 +32,16 @@ make
 ```
 
 Generate simulation data
-```cmd_tpch_gen
-# Generate simulation data
-./dbgen -s 10
-```
+
 ::: tip
 It is recommended to follow this command and start with 10GB data. After experiencing this case, you can also try 100GB of data by replacing 10 with 100 in this command. What's more, you should be careful not to exceed the local external storage capacity.
 :::
+
+```shell
+# Generate simulation data
+./dbgen -s 10
+```
+
 
 Let me briefly explain the files inside tpch-dbgen. The .tbl files indicates the generated table data. There are 22 TPC-H sqls in queries/. The explain files only print the plan but not actually execute.
 
@@ -46,14 +49,21 @@ Let me briefly explain the files inside tpch-dbgen. The .tbl files indicates the
 ## Load Data
 
 Load TPC-H data with psql
-```cmd_load_tpch
-# Create table
+
+::: tip
+Note that it should always be executed in the tpch-dbgen/ directory.
+:::
+
+```shell
+# 创建表
 psql -f dss.ddl
 
-# Use pg client mode 
+# 进入数据库Cli模式
 psql
+```
 
-# Load Data
+```sql
+# 导入数据
 \copy nation from 'nation.tbl' DELIMITER '|';
 \copy region from 'region.tbl' DELIMITER '|';
 \copy supplier from 'supplier.tbl' DELIMITER '|';
@@ -65,13 +75,9 @@ psql
 
 ```
 
-::: tip
-Note that it should always be executed in the tpch-dbgen/ directory.
-:::
-
 After loading data, execute the following commands to set the maximum parallelism for the created tables.
 
-```
+```sql
 # Set maximum parallelism for tables that require PX queries (if not set, no PX queries will be executed)
 alter table nation set (px_workers = 100);
 alter table region set (px_workers = 100);
@@ -86,18 +92,18 @@ alter table lineitem set (px_workers = 100);
 ## Execute parallel queries in single server
 After loading the simulated data, we first execute parallel queries in single server to observe the query speed.
 1. After psql, execute the following command to turn on the timer.
-```
+```sql
 \timing
 ```
 
 2. Set max workers in single server
 Set max workers in single server through max_parallel_workers_per_gather:
-```
+```sql
 set max_parallel_workers_per_gather=2; -- Set 2
 ```
 
 3. Execute the following command to view the execution plan.
-```
+```sql
 \i queries/q18.explain.sql
 ```
 
@@ -105,7 +111,7 @@ You can see the parallel plan in single machine with 2 workers as shown in the f
 ![Parallel plan in single machine for Q18](../imgs/65_htap_single_parallel.png)
 
 4. Execute the following SQL.
-```
+```sql
 \i queries/q18.sql
 ```
 
@@ -123,23 +129,23 @@ Set the parameters to restart docker to fix it.
 After experiencing single-computer parallel query, we turn on parallel queries in distributed servers.
 
 1. After psql, execute the following command to turn on the timing (if it is already on, you can skip it).
-```
+```sql
 \timing
 ```
 
 2. Execute the following command to enable parallel query in distributed servers(PX).
-```
+```sql
 set polar_enable_px=on;
 ```
 
 3. Set workers in every server as 1.
-```
+```sql
 set polar_px_dop_per_node=1;
 ```
 
 
 4. Execute the following command to view the execution plan.
-```
+```sql
 \i queries/q18.explain.sql
 ```
 
@@ -150,7 +156,7 @@ This cluster comes with 2 ROs and the default workers is 2x1=2 when PX is turned
 
 
 5. Execute the following SQL.
-```
+```sql
 \i queries/q18.sql
 ```
 
@@ -162,7 +168,7 @@ If you are interested, you can also increase the parallelism or the amount of da
 
 The PX parallel query goes to get the global consistency view, so the data obtained is consistent and there is no need to worry about data correctness.
 We can manually set the workers for px：
-```
+```sql
 set polar_px_dop_per_node = 1;
 \i queries/q18.sql 
 
